@@ -8,12 +8,13 @@ import Data.Dates (DateTime, pDateTime, parseDate,getCurrentDateTime)
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
-somewhere :: Parser a -> Parser a
-somewhere p = try p <|> (anyChar >> somewhere p)
+
 
 parseDateLiberal :: DateTime -> String -> Either ParseError DateTime
 parseDateLiberal now str =
   let
+    somewhere :: Parser a -> Parser a
+    somewhere p = try p <|> (anyChar >> somewhere p)
     p = somewhere $ pDateTime now
   in parse p "" str
 

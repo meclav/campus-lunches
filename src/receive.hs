@@ -16,7 +16,9 @@ import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import Data.Monoid ((<>))
 
-import qualified Text.Parsec as P
+import Text.Parsec
+import Text.Parsec.String (Parser)
+
 import Data.Dates (DateTime,pDateTime, parseDate, getCurrentDateTime)
 
 -- We want to work with such values, will reject messages that we cannot parse into this form
@@ -29,20 +31,13 @@ data Email = Email {
   content :: MIMEContent
 } deriving (Show, Eq)
 
-
+parseDateLiberal :: DateTime -> String -> Either ParseError DateTime
 parseDateLiberal now str =
   let
-  skip = P.skipMany P.anyToken
-  liberalParse = P.between skip skip (pDateTime now)
-  in P.parse liberalParse str
-demo :: DateTime -> MIME.MIMEValue -> String
-demo now MIME.MIMEValue { mime_val_content = content, mime_val_headers = headers }
-  = let
-      matchesParam name MIMEParam {paramName=paramName} = name == paramName
-      paramVal MIMEParam {paramValue=v} = v
-      extract fieldName = listToMaybe $ map paramVal $ filter (matchesParam fieldName) headers
-      dateField = fmap (parseDate now) $ fmap show $ extract "date"
-    in show dateField <> show (extract "date")
+    somewhere :: Parser a -> Parser a
+    somewhere p = try p <|> (anyChar >> somewhere p)
+    p = somewhere $ pDateTime now
+  in parse p "" str
 
 unpackMIMEValue :: DateTime -> MIME.MIMEValue -> Maybe Email
 unpackMIMEValue now MIME.MIMEValue { mime_val_content = content, mime_val_headers = headers }
@@ -81,4 +76,4 @@ deliveryHandler :: DateTime -> (AMQP.Message, AMQP.Envelope) -> IO ()
 deliveryHandler now (msg, metadata) =
   let messageText = decodeUtf8 $ msgBody msg
       message = parseMIMEMessage $ toStrict messageText
-  in putStrLn $ show $ demo now message
+  in putStrLn $ show $ unpackMIMEValue now message
