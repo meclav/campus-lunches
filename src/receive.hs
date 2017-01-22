@@ -16,8 +16,6 @@ import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import Data.Monoid ((<>))
 
-import Control.Lens
-
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
