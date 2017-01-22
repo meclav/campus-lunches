@@ -49,7 +49,7 @@ unpackMIMEValue now MIME.MIMEValue { mime_val_content = content, mime_val_header
         let
           relevantFields = map paramVal $ filter (matchesParam fieldName) headers
           listToEither [] = Left ("No MIME param named "++ fieldName)
-          listToEither x:xs = Right x
+          listToEither (x:xs) = Right x
         in listToEither relevantFields
       dateField = join $ fmap (parseDateSubstring now) $ fmap show $ extract "date"
       makeEmail (Right date, Right to, Right from, Right subject )
