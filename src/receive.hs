@@ -11,10 +11,12 @@ import Codec.MIME.Parse (parseMIMEMessage)
 import Codec.MIME.Type as MIME
 import qualified Data.Text as T
 
-import Data.Maybe (listToMaybe)
+import Data.Either
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Encoding (decodeUtf8)
 import Data.Monoid ((<>))
+
+import Control.Lens
 
 import Text.Parsec
 import Text.Parsec.String (Parser)
@@ -26,38 +28,41 @@ data Email = Email {
   date :: DateTime,
   to :: T.Text,
   from :: T.Text,
-  cc :: Maybe T.Text,
   subject :: T.Text,
   content :: MIMEContent
 } deriving (Show, Eq)
 
-parseDateLiberal :: DateTime -> String -> Either ParseError DateTime
-parseDateLiberal now str =
+parseDateSubstring :: DateTime -> String -> Either ParseError DateTime
+parseDateSubstring now str =
   let
     somewhere :: Parser a -> Parser a
     somewhere p = try p <|> (anyChar >> somewhere p)
     p = somewhere $ pDateTime now
   in parse p "" str
 
-unpackMIMEValue :: DateTime -> MIME.MIMEValue -> Maybe Email
+unpackMIMEValue :: DateTime -> MIME.MIMEValue -> Either String Email
 unpackMIMEValue now MIME.MIMEValue { mime_val_content = content, mime_val_headers = headers }
   = let
       matchesParam name MIMEParam {paramName=paramName} = name == paramName
       paramVal MIMEParam {paramValue=v} = v
-      extract fieldName = listToMaybe $ map paramVal $ filter (matchesParam fieldName) headers
-      dateField = fmap (parseDate now) $ fmap show $ extract "date"
-      makeEmail (Just (Right date), Just to, Just from, cc, Just subject )
-        = Just Email
+      extract fieldName =
+        let
+          relevantFields = map paramVal $ filter (matchesParam fieldName) headers
+          listToEither [] = Left ("No MIME param named "++ fieldName)
+          listToEither x:xs = Right x
+        in listToEither relevantFields
+      dateField = join $ fmap (parseDateSubstring now) $ fmap show $ extract "date"
+      makeEmail (Right date, Right to, Right from, Right subject )
+        = Right Email
           { date = date
           , to = to
           , from = from
-          , cc = cc
           , subject = subject
           , content = content
         }
-      makeEmail _ = Nothing
+      makeEmail (d,t,f,s) = show $ lefts [d,t,f,s]
 
-    in makeEmail (dateField, extract "to", extract "from", extract "cc", extract "subject")
+    in makeEmail (dateField, extract "to", extract "from", extract "subject")
 
 main :: IO ()
 main = do
